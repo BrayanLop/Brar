@@ -1,0 +1,63 @@
+# Levanta Brar con una BD PostgreSQL local (solo desarrollo; en producción se usa la BD de Supabase).
+# Antes: cp .env.example .env  y rellena los valores (el .env no se versiona).
+#
+#   docker compose up --build
+#
+# API:    http://localhost:8080   (health en /health, documentación en /scalar/v1 si ASPNETCORE_ENVIRONMENT=Development)
+#
+# Para producción NO se usa el servicio postgres: despliega la imagen con
+# ConnectionStrings__DefaultConnection apuntando a la BD de Supabase (ver README).
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: brar-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-brar}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}
+    ports:
+      - "5433:5432"   # 5433 en el host para no chocar con otro Postgres local
+    volumes:
+      - brar_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - brar-network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: brar-api:latest
+    container_name: brar-api
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-brar};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}"
+      NaturalJwt__Key: ${NaturalJwt__Key:?Define NaturalJwt__Key en .env (la misma clave JWT de Natural)}
+      NaturalJwt__Issuer: ${NaturalJwt__Issuer:-Natural.Api}
+      NaturalJwt__Audience: ${NaturalJwt__Audience:-Natural.Client}
+      NaturalApi__BaseUrl: ${NaturalApi__BaseUrl:?Define NaturalApi__BaseUrl en .env (URL de la API de Natural)}
+      NaturalApi__ClaveServicio: ${NaturalApi__ClaveServicio:?Define NaturalApi__ClaveServicio en .env (igual a Plataforma__ClaveServicio de Natural)}
+      NaturalApi__TimeoutSegundos: ${NaturalApi__TimeoutSegundos:-15}
+      Cors__AllowedOrigins__0: ${Cors__AllowedOrigins__0:-}
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: "http://+:8080"
+      # La BD local nace vacía: aplica las migraciones al arrancar.
+      RunMigrationsOnStartup: ${RunMigrationsOnStartup:-true}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - brar-network
+    restart: unless-stopped
+
+volumes:
+  brar_postgres_data:
+
+networks:
+  brar-network:
+    driver: bridge

@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Brar.Application/Brar.Application.csproj" />
+  <Project Path="Brar.Domain/Brar.Domain.csproj" />
+  <Project Path="Brar.Infrastructure/Brar.Infrastructure.csproj" />
+  <Project Path="Brar.Tests/Brar.Tests.csproj" />
+  <Project Path="Brar/Brar.csproj" />
+</Solution>

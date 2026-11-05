@@ -1,0 +1,19 @@
+# Compilación
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+.vs/
+.vscode/
+.idea/
+TestResults/
+
+# Secretos: NUNCA se versionan (usa variables de entorno o user-secrets)
+.env
+.env.*
+!.env.example
+**/appsettings.Local.json
+**/appsettings.Production.json
+*.pfx
