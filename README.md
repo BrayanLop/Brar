@@ -89,3 +89,17 @@ dotnet ef migrations add <Nombre> --project Brar.Infrastructure --startup-projec
 ```
 
 Convenciones: código y rutas en español (como Natural y Citas); nunca loguear contraseñas, tokens ni la clave de servicio.
+
+## Producción en Lightsail (Docker + nginx)
+
+Ejemplos listos en [`deploy/`](deploy): `docker-compose.prod.yml` y `nginx.example.conf`.
+
+1. **Imagen:** `docker pull bray09/brar-api:<version>` (o construirla en la instancia).
+2. **Red interna:** `docker network create natural-net` y conectar a ella el contenedor de Natural. Brar llama a Natural por `http://<contenedor-natural>:8080/api` (variable `NaturalApi__BaseUrl`), no por la URL pública.
+3. **`.env`** junto al compose, con las variables de arriba (BD de Supabase de Brar, `NaturalJwt__Key`, `NaturalApi__ClaveServicio`).
+4. **En Natural:** variable `Plataforma__ClaveServicio` con el **mismo** valor que `NaturalApi__ClaveServicio`.
+5. **nginx:** subdominio `brar.naturalback.vip` apuntando a `127.0.0.1:8081` (certificado con certbot) y, en el server de Natural, `location ~* ^/v2/api/plataforma { return 404; }` para cerrar la API interna al público.
+6. **Primer arranque:** `RunMigrationsOnStartup=true`; luego quitarlo.
+7. **Verificar:** `curl https://brar.naturalback.vip/health` → `{"estado":"ok",...}`; `curl https://naturalback.vip/v2/api/Plataforma/Empresas` → `404`.
+
+`UseForwardedHeaders=true` (ya puesto en el compose de producción) hace que la auditoría guarde la IP real del cliente; solo es seguro porque el puerto de Brar se publica en `127.0.0.1`.

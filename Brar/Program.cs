@@ -31,6 +31,20 @@ builder.Services.AddCors(options => options.AddPolicy(PoliticaCors, policy =>
     policy.AllowAnyHeader().AllowAnyMethod();
 }));
 
+// Detrás de nginx: sin esto la IP que se audita sería la del proxy. Solo se activa con UseForwardedHeaders=true,
+// y únicamente si Brar NO es alcanzable directamente desde internet (solo por nginx / red interna de Docker),
+// porque confiar en X-Forwarded-For permite falsificar la IP si cualquiera puede llamar a Brar.
+if (builder.Configuration.GetValue<bool>("UseForwardedHeaders"))
+{
+    builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(o =>
+    {
+        o.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+                             | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
+        o.KnownIPNetworks.Clear();
+        o.KnownProxies.Clear();
+    });
+}
+
 builder.Services.AddExceptionHandler<ErrorApiHandler>();
 builder.Services.AddProblemDetails();
 
@@ -45,6 +59,9 @@ if (app.Configuration.GetValue<bool>("RunMigrationsOnStartup"))
 
 // Si Brar vive bajo un prefijo de URL del proxy (p. ej. /brar) y el proxy NO lo recorta, se define PathBase=/brar.
 // Si el proxy sí lo recorta (lo habitual) o Brar tiene su propio subdominio, se deja vacío.
+if (app.Configuration.GetValue<bool>("UseForwardedHeaders"))
+    app.UseForwardedHeaders();
+
 var pathBase = app.Configuration["PathBase"];
 if (!string.IsNullOrWhiteSpace(pathBase))
     app.UsePathBase(pathBase.StartsWith('/') ? pathBase : "/" + pathBase);
