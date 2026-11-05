@@ -38,6 +38,7 @@ public class EmpresasServicioTests
         public List<Auditoria> Items { get; } = [];
         public Task AgregarAsync(Auditoria a, CancellationToken ct) { Items.Add(a); return Task.CompletedTask; }
         public Task ActualizarAsync(Auditoria a, CancellationToken ct) => Task.CompletedTask;
+        public Task<PaginaAuditoria> ConsultarAsync(FiltroAuditoria filtro, CancellationToken ct) => throw new NotImplementedException();
     }
 
     private static (EmpresasServicio Servicio, NaturalFalso Natural, RepoMemoria Repo) Crear()

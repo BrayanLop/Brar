@@ -43,6 +43,12 @@ if (app.Configuration.GetValue<bool>("RunMigrationsOnStartup"))
     scope.ServiceProvider.GetRequiredService<BrarDbContext>().Database.Migrate();
 }
 
+// Si Brar vive bajo un prefijo de URL del proxy (p. ej. /brar) y el proxy NO lo recorta, se define PathBase=/brar.
+// Si el proxy sí lo recorta (lo habitual) o Brar tiene su propio subdominio, se deja vacío.
+var pathBase = app.Configuration["PathBase"];
+if (!string.IsNullOrWhiteSpace(pathBase))
+    app.UsePathBase(pathBase.StartsWith('/') ? pathBase : "/" + pathBase);
+
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())

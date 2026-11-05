@@ -2,7 +2,7 @@
 
 Microservicio del **superadmin de plataforma** de Natural: crear y activar/desactivar **tenants** (empresas), administrar sus **accesos** y dejar **auditoría** de todo. Tiene **BD propia** (PostgreSQL) y **no toca la BD de Natural**: todo cambio sobre empresas y usuarios lo hace llamando a la API interna `api/Plataforma/*` de Natural con una clave de servicio.
 
-> Plan de trabajo: `../workplan_plataforma.md`. Estado: fases F1–F4 (esqueleto, seguridad, persistencia, empresas).
+> Plan de trabajo: `../workplan_plataforma.md`. Estado: fases F1–F5 (esqueleto, seguridad, persistencia, empresas, accesos, soporte y auditoría).
 
 ## Cómo funciona
 
@@ -34,6 +34,14 @@ Brar.Tests           pruebas (dominio, casos de uso, cliente HTTP, seguridad de 
 | `POST /Empresas` | Crea empresa + primer administrador (contraseña = SHA-256 base64, 44 car.) |
 | `PUT /Empresas/{id}` | Actualiza datos de la empresa |
 | `PATCH /Empresas/{id}/Estado?activa=` | Activa/desactiva la empresa |
+| `GET /Empresas/{id}/Accesos` | Personas de la empresa y su acceso (usuario, rol, estado) |
+| `POST /Empresas/{id}/Accesos` | Crea el acceso de una persona (usuario, contraseña SHA-256 base64, rol 01/02/03) |
+| `PATCH /Empresas/{id}/Accesos/{usuarioId}/Estado?activo=` | Activa/desactiva un acceso |
+| `PATCH /Empresas/{id}/Accesos/{usuarioId}/Rol` | Cambia el rol |
+| `PUT /Empresas/{id}/Accesos/{usuarioId}/Contrasena` | Restablece la contraseña |
+| `DELETE /Empresas/{id}/Accesos/{usuarioId}` | Quita el acceso (la persona y su historial se conservan) |
+| `POST /Empresas/{id}/Impersonar` | Token de soporte como admin de la empresa. Exige `motivo` (5–300) y `minutos` (5–120, defecto 30); queda auditado y registrado en `SesionSoporte` |
+| `GET /Auditoria?empresaId&actorPersonaId&desde&hasta&pagina&tamano` | Consulta paginada (más reciente primero; `hasta` solo fecha = día completo) |
 
 Errores: `ProblemDetails` con el mensaje en `title`/`detail`.
 

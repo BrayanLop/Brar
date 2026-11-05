@@ -77,6 +77,8 @@ public class AuditoriaServicioTests
         public List<ResultadoAuditoria> EstadoAlGuardar { get; } = [];
         public bool FallarAlAgregar { get; set; }
 
+        public Task<PaginaAuditoria> ConsultarAsync(FiltroAuditoria filtro, CancellationToken ct) => throw new NotImplementedException();
+
         public Task AgregarAsync(Auditoria auditoria, CancellationToken ct)
         {
             if (FallarAlAgregar) throw new InvalidOperationException("BD caída");

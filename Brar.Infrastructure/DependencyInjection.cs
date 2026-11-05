@@ -15,6 +15,7 @@ public static class DependencyInjection
         services.AddDbContext<BrarDbContext>(o =>
             o.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
         services.AddScoped<IAuditoriaRepositorio, AuditoriaRepositorio>();
+        services.AddScoped<Brar.Application.Soporte.ISesionSoporteRepositorio, SesionSoporteRepositorio>();
 
         var natural = configuration.GetSection("NaturalApi");
         var baseUrl = natural["BaseUrl"] ?? throw new InvalidOperationException("Falta NaturalApi__BaseUrl.");
