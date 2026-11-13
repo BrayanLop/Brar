@@ -2,7 +2,7 @@
 
 Microservicio del **superadmin de plataforma** de Natural: crear y activar/desactivar **tenants** (empresas), administrar sus **accesos** y dejar **auditoría** de todo. Tiene **BD propia** (PostgreSQL) y **no toca la BD de Natural**: todo cambio sobre empresas y usuarios lo hace llamando a la API interna `api/Plataforma/*` de Natural con una clave de servicio.
 
-> Plan de trabajo: `../workplan_plataforma.md`. Estado: fases F1–F4 (esqueleto, seguridad, persistencia, empresas).
+> Plan de trabajo: `../workplan_plataforma.md`. Estado: fases F1–F5 (esqueleto, seguridad, persistencia, empresas, accesos, soporte y auditoría).
 
 ## Cómo funciona
 
@@ -34,6 +34,14 @@ Brar.Tests           pruebas (dominio, casos de uso, cliente HTTP, seguridad de 
 | `POST /Empresas` | Crea empresa + primer administrador (contraseña = SHA-256 base64, 44 car.) |
 | `PUT /Empresas/{id}` | Actualiza datos de la empresa |
 | `PATCH /Empresas/{id}/Estado?activa=` | Activa/desactiva la empresa |
+| `GET /Empresas/{id}/Accesos` | Personas de la empresa y su acceso (usuario, rol, estado) |
+| `POST /Empresas/{id}/Accesos` | Crea el acceso de una persona (usuario, contraseña SHA-256 base64, rol 01/02/03) |
+| `PATCH /Empresas/{id}/Accesos/{usuarioId}/Estado?activo=` | Activa/desactiva un acceso |
+| `PATCH /Empresas/{id}/Accesos/{usuarioId}/Rol` | Cambia el rol |
+| `PUT /Empresas/{id}/Accesos/{usuarioId}/Contrasena` | Restablece la contraseña |
+| `DELETE /Empresas/{id}/Accesos/{usuarioId}` | Quita el acceso (la persona y su historial se conservan) |
+| `POST /Empresas/{id}/Impersonar` | Token de soporte como admin de la empresa. Exige `motivo` (5–300) y `minutos` (5–120, defecto 30); queda auditado y registrado en `SesionSoporte` |
+| `GET /Auditoria?empresaId&actorPersonaId&desde&hasta&pagina&tamano` | Consulta paginada (más reciente primero; `hasta` solo fecha = día completo) |
 
 Errores: `ProblemDetails` con el mensaje en `title`/`detail`.
 
@@ -81,3 +89,17 @@ dotnet ef migrations add <Nombre> --project Brar.Infrastructure --startup-projec
 ```
 
 Convenciones: código y rutas en español (como Natural y Citas); nunca loguear contraseñas, tokens ni la clave de servicio.
+
+## Producción en Lightsail (Docker + nginx)
+
+Ejemplos listos en [`deploy/`](deploy): `docker-compose.prod.yml` y `nginx.example.conf`.
+
+1. **Imagen:** `docker pull bray09/brar-api:<version>` (o construirla en la instancia).
+2. **Red interna:** `docker network create natural-net` y conectar a ella el contenedor de Natural. Brar llama a Natural por `http://<contenedor-natural>:8080/api` (variable `NaturalApi__BaseUrl`), no por la URL pública.
+3. **`.env`** junto al compose, con las variables de arriba (BD de Supabase de Brar, `NaturalJwt__Key`, `NaturalApi__ClaveServicio`).
+4. **En Natural:** variable `Plataforma__ClaveServicio` con el **mismo** valor que `NaturalApi__ClaveServicio`.
+5. **nginx:** subdominio `brar.naturalback.vip` apuntando a `127.0.0.1:8081` (certificado con certbot) y, en el server de Natural, `location ~* ^/v2/api/plataforma { return 404; }` para cerrar la API interna al público.
+6. **Primer arranque:** `RunMigrationsOnStartup=true`; luego quitarlo.
+7. **Verificar:** `curl https://brar.naturalback.vip/health` → `{"estado":"ok",...}`; `curl https://naturalback.vip/v2/api/Plataforma/Empresas` → `404`.
+
+`UseForwardedHeaders=true` (ya puesto en el compose de producción) hace que la auditoría guarde la IP real del cliente; solo es seguro porque el puerto de Brar se publica en `127.0.0.1`.

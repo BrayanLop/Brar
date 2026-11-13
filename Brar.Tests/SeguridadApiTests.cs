@@ -38,6 +38,8 @@ public class SeguridadApiTests : IClassFixture<SeguridadApiTests.BrarFactory>
                 s.AddScoped<INaturalPlataforma, NaturalVacio>();
                 s.RemoveAll<IAuditoriaRepositorio>();
                 s.AddScoped<IAuditoriaRepositorio, RepoNulo>();
+                s.RemoveAll<Brar.Application.Soporte.ISesionSoporteRepositorio>();
+                s.AddScoped<Brar.Application.Soporte.ISesionSoporteRepositorio, SesionesNulas>();
             });
     }
 
@@ -57,10 +59,16 @@ public class SeguridadApiTests : IClassFixture<SeguridadApiTests.BrarFactory>
         public Task<ImpersonacionDto> ImpersonarAsync(Actor actor, int e, int m, CancellationToken ct) => throw new NotImplementedException();
     }
 
+    private sealed class SesionesNulas : Brar.Application.Soporte.ISesionSoporteRepositorio
+    {
+        public Task AgregarAsync(Brar.Domain.SesionSoporte sesion, CancellationToken ct) => Task.CompletedTask;
+    }
+
     private sealed class RepoNulo : IAuditoriaRepositorio
     {
         public Task AgregarAsync(Brar.Domain.Auditoria a, CancellationToken ct) => Task.CompletedTask;
         public Task ActualizarAsync(Brar.Domain.Auditoria a, CancellationToken ct) => Task.CompletedTask;
+        public Task<PaginaAuditoria> ConsultarAsync(FiltroAuditoria filtro, CancellationToken ct) => Task.FromResult(new PaginaAuditoria(0, 1, 25, []));
     }
 
     private readonly BrarFactory _factory;
@@ -116,6 +124,37 @@ public class SeguridadApiTests : IClassFixture<SeguridadApiTests.BrarFactory>
 
     [Fact] public async Task Token_sin_sub_valido_es_401() =>
         Assert.Equal(HttpStatusCode.Unauthorized, await Get("/Empresas", Token("00", sub: "no-numero")));
+
+    [Theory]
+    [InlineData("/Auditoria")]
+    [InlineData("/Empresas/1/Accesos")]
+    public async Task Rutas_nuevas_exigen_rol_00(string ruta)
+    {
+        Assert.Equal(HttpStatusCode.Unauthorized, await Get(ruta, null));
+        Assert.Equal(HttpStatusCode.Forbidden, await Get(ruta, Token("01")));
+    }
+
+    [Fact]
+    public async Task Auditoria_con_rol_00_responde_200_y_valida_paginacion()
+    {
+        Assert.Equal(HttpStatusCode.OK, await Get("/Auditoria", Token("00")));
+        Assert.Equal(HttpStatusCode.BadRequest, await Get("/Auditoria?pagina=0", Token("00")));
+        Assert.Equal(HttpStatusCode.BadRequest, await Get("/Auditoria?tamano=500", Token("00")));
+    }
+
+    [Fact]
+    public async Task Impersonar_sin_motivo_es_400_y_sin_rol_00_es_403()
+    {
+        var cliente = _factory.CreateClient();
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token("00"));
+        var sinMotivo = await cliente.PostAsJsonAsync("/Empresas/1/Impersonar", new { minutos = 30 });
+        Assert.Equal(HttpStatusCode.BadRequest, sinMotivo.StatusCode);
+
+        var admin = _factory.CreateClient();
+        admin.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token("01"));
+        var prohibido = await admin.PostAsJsonAsync("/Empresas/1/Impersonar", new { motivo = "Revisión de soporte" });
+        Assert.Equal(HttpStatusCode.Forbidden, prohibido.StatusCode);
+    }
 
     [Fact]
     public async Task Error_de_validacion_se_devuelve_como_400_con_el_mensaje()

@@ -1,5 +1,4 @@
 using Brar.Application.Common;
-using Brar.Domain;
 
 namespace Brar.Application.Auditoria;
 
@@ -10,7 +9,18 @@ public interface IAuditoriaRepositorio
 
     /// <summary>Persiste los cambios de una auditoría ya guardada (cierre).</summary>
     Task ActualizarAsync(Domain.Auditoria auditoria, CancellationToken ct);
+
+    Task<PaginaAuditoria> ConsultarAsync(FiltroAuditoria filtro, CancellationToken ct);
 }
+
+public sealed record FiltroAuditoria(
+    int? EmpresaId, int? ActorPersonaId, DateTime? DesdeUtc, DateTime? HastaExclusivaUtc, int Pagina, int Tamano);
+
+public sealed record AuditoriaDto(
+    long Id, DateTime FechaUtc, int ActorPersonaId, string ActorNombre, string Accion,
+    int? EmpresaId, int? UsuarioId, string Resultado, string? Detalle, string? Ip);
+
+public sealed record PaginaAuditoria(int Total, int Pagina, int Tamano, IReadOnlyList<AuditoriaDto> Items);
 
 /// <summary>
 /// Envuelve cada acción del superadmin: escribe la auditoría en <c>pendiente</c> ANTES de llamar a Natural y
@@ -18,9 +28,10 @@ public interface IAuditoriaRepositorio
 /// </summary>
 public sealed class AuditoriaServicio(IAuditoriaRepositorio repositorio, TimeProvider reloj)
 {
+    /// <summary>La operación recibe el Id de la auditoría ya guardada (p. ej. para enlazar una sesión de soporte).</summary>
     public async Task<T> EjecutarAsync<T>(
         Actor actor, string accion, int? empresaId, int? usuarioId, string? detalle,
-        Func<Task<T>> operacion, CancellationToken ct)
+        Func<long, Task<T>> operacion, CancellationToken ct)
     {
         var auditoria = Domain.Auditoria.Iniciar(
             reloj.GetUtcNow().UtcDateTime, actor.PersonaId, actor.Nombre, accion, empresaId, usuarioId, detalle, actor.Ip);
@@ -29,7 +40,7 @@ public sealed class AuditoriaServicio(IAuditoriaRepositorio repositorio, TimePro
 
         try
         {
-            var resultado = await operacion();
+            var resultado = await operacion(auditoria.Id);
             auditoria.Cerrar(exito: true);
             await repositorio.ActualizarAsync(auditoria, ct);
             return resultado;
@@ -43,9 +54,14 @@ public sealed class AuditoriaServicio(IAuditoriaRepositorio repositorio, TimePro
         }
     }
 
+    public Task<T> EjecutarAsync<T>(
+        Actor actor, string accion, int? empresaId, int? usuarioId, string? detalle,
+        Func<Task<T>> operacion, CancellationToken ct) =>
+        EjecutarAsync(actor, accion, empresaId, usuarioId, detalle, _ => operacion(), ct);
+
     /// <summary>Variante sin valor de retorno.</summary>
     public Task EjecutarAsync(
         Actor actor, string accion, int? empresaId, int? usuarioId, string? detalle,
         Func<Task> operacion, CancellationToken ct) =>
-        EjecutarAsync<bool>(actor, accion, empresaId, usuarioId, detalle, async () => { await operacion(); return true; }, ct);
+        EjecutarAsync<bool>(actor, accion, empresaId, usuarioId, detalle, async _ => { await operacion(); return true; }, ct);
 }
